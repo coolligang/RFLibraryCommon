@@ -7,8 +7,10 @@ import time
 import hashlib
 from poster.encode import multipart_encode
 from poster.streaminghttp import register_openers
+
 """ pip install poster """
 import urllib2
+import re
 
 
 class RfeLibrary:
@@ -19,7 +21,48 @@ class RfeLibrary:
     longMessage = False
 
     def __init__(self):
+        self._type_equality_funcs = {}
         self.s = requests.session()
+
+    def _baseAssertEqual(self, first, second, msg=None):
+        """The default assertEqual implementation, not type specific."""
+        if not first == second:
+            standardMsg = '%s != %s' % (safe_repr(first), safe_repr(second))
+            msg = self._formatMessage(msg, standardMsg)
+            raise AssertionError(msg)
+
+    def _getAssertEqualityFunc(self, first, second):
+        """Get a detailed comparison function for the types of the two args.
+
+        Returns: A callable accepting (first, second, msg=None) that will
+        raise a failure exception if first != second with a useful human
+        readable error message for those types.
+        """
+        #
+        # NOTE(gregory.p.smith): I considered isinstance(first, type(second))
+        # and vice versa.  I opted for the conservative approach in case
+        # subclasses are not intended to be compared in detail to their super
+        # class instances using a type equality func.  This means testing
+        # subtypes won't automagically use the detailed comparison.  Callers
+        # should use their type specific assertSpamEqual method to compare
+        # subclasses if the detailed comparison is desired and appropriate.
+        # See the discussion in http://bugs.python.org/issue2578.
+        #
+        if type(first) is type(second):
+            asserter = self._type_equality_funcs.get(type(first))
+            if asserter is not None:
+                if isinstance(asserter, basestring):
+                    asserter = getattr(self, asserter)
+                return asserter
+
+        return self._baseAssertEqual
+
+    def assertEqual(self, first, second, msg=None):
+        """
+        Fail if the two objects are unequal as determined by the '==' operator.
+        """
+        assertion_func = self._getAssertEqualityFunc(first, second)
+        assertion_func(first, second, msg=msg)
 
     def _formatMessage(self, msg, standardMsg):
         """Honour the longMessage attribute when generating failure messages.
@@ -214,11 +257,22 @@ class RfeLibrary:
             res_list.append(obj)
             return res_list
 
+    def stringValueByPattern(self, pattern, string):
+        """
+        根据正则表达式获取字符串
+        :return:
+        """
+        strValue = re.search(pattern, string).groups()
+        return strValue[0]
+
 
 if __name__ == "__main__":
     test = RfeLibrary()
-    url = "http://10.10.253.5:8760/api/u/v1/user/app/code"
-    body_value = {"phone": "15300000000"}
-    headers = {"TRACE_ID": "#TV-)DiW", "TIMESTAMP": "20180709182733000", "EXTRA": "phone=15023363527","SIGN": "3c46a0428610d6122b02f70d7d897d97"}
-    bb = test.reqByDataform(url, body_value, headers)
-    print bb
+    str0 = test.stringValueByPattern("你好(.*)!", "你好122324!")
+    print str0
+
+#     url = "http://10.10.253.5:8760/api/u/v1/user/app/code"
+#     body_value = {"phone": "15300000000"}
+#     headers = {"TRACE_ID": "#TV-)DiW", "TIMESTAMP": "20180709182733000", "EXTRA": "phone=15023363527","SIGN": "3c46a0428610d6122b02f70d7d897d97"}
+#     bb = test.reqByDataform(url, body_value, headers)
+#     print bb
